@@ -57,7 +57,7 @@ service cloud.firestore {
       allow create: if isStaff() || validSelfStudent(personId) || validSelfGuardian();
       allow update: if isStaff() || (
         ownPerson(personId)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName', 'phone', 'whatsapp', 'address', 'updatedAt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName', 'phone', 'whatsapp', 'address', 'profilePhotoUrl', 'profilePhotoPath', 'updatedAt'])
       );
       allow delete: if false;
     }

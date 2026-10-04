@@ -23,6 +23,7 @@ export function PersonForm({ enabled, onCreated }: { enabled: boolean; onCreated
   const [phone, setPhone] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [guardianCpf, setGuardianCpf] = useState("");
+  const [createdAccess, setCreatedAccess] = useState<{ personId: string; accessPin: string; guardianPin?: string } | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [professors, setProfessors] = useState<ProfessorOption[]>([]);
@@ -47,6 +48,7 @@ export function PersonForm({ enabled, onCreated }: { enabled: boolean; onCreated
     if (!enabled) return setMessage("Configure o Firebase para salvar o cadastro.");
 
     const payload: CreateStudentPayload = {
+      ...(form.get("photo") instanceof File && (form.get("photo") as File).size > 0 ? { photo: form.get("photo") as File } : {}),
       person: {
         birthDate,
         fullName: String(form.get("fullName") ?? "").trim().toLocaleUpperCase("pt-BR"),
@@ -82,8 +84,8 @@ export function PersonForm({ enabled, onCreated }: { enabled: boolean; onCreated
       setPhone("");
       setWhatsapp("");
       setGuardianCpf("");
-      setMessage(`Pessoa criada com sucesso: ${result.personId}`);
-      onCreated?.();
+      setMessage("Cadastro concluído e PIN de acesso gerado.");
+      setCreatedAccess(result);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível salvar.");
     } finally {
@@ -109,6 +111,7 @@ export function PersonForm({ enabled, onCreated }: { enabled: boolean; onCreated
         </label>
         {birthDate && (
           <>
+            <label className="field wide"><span>Foto de perfil (opcional)</span><input name="photo" type="file" accept="image/*" capture="user" /><small>Imagem de até 5 MB.</small></label>
             <label className="field wide required">
               <span>Nome completo</span>
               <input className="uppercase-input" name="fullName" required autoComplete="name" onInput={uppercaseInput} />
@@ -154,6 +157,7 @@ export function PersonForm({ enabled, onCreated }: { enabled: boolean; onCreated
 
       {message && <div className="form-message" role="status">{message}</div>}
       <button className="primary action" disabled={busy || !birthDate}>{busy ? "Salvando…" : "Salvar pessoa"}</button>
+      {createdAccess && <div className="modal-backdrop"><section className="modal-card compact-modal access-pin-modal"><span className="eyebrow">CADASTRO CONCLUÍDO</span><h2>Guarde os PINs de acesso</h2><p>Use estes códigos somente quando a leitura facial não reconhecer a pessoa.</p><div className="pin-result"><span>Aluno</span><strong>{createdAccess.accessPin}</strong></div>{createdAccess.guardianPin && <div className="pin-result"><span>Responsável</span><strong>{createdAccess.guardianPin}</strong></div>}<button type="button" className="primary action" onClick={() => { setCreatedAccess(null); onCreated?.(); }}>Entendi e guardei</button></section></div>}
     </form>
   );
 }

@@ -24,12 +24,14 @@ import {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
   type DocumentData,
   type Unsubscribe,
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
 
 export interface CreateStudentPayload {
+  photo?: File;
   person: {
     fullName: string;
     birthDate: string;
@@ -82,6 +84,8 @@ export interface ProfessorOption {
 }
 
 export interface StudentDirectoryRow extends PersonRow {
+  profilePhotoUrl?: string;
+  accessPin?: string;
   phone?: string;
   whatsapp?: string;
   address?: string;
@@ -97,6 +101,7 @@ export interface StudentDirectoryRow extends PersonRow {
     phone?: string;
     address?: string;
     relationship: string;
+    accessPin?: string;
   };
 }
 
@@ -131,12 +136,15 @@ export interface AcademyDayRow {
 
 export interface StudentMessage {
   id: string;
+  title?: string;
   text: string;
   status: string;
+  readAt?: unknown;
   sentAt?: { toDate?: () => Date };
 }
 
 export interface StudentRegistrationInput {
+  photo?: File;
   fullName: string;
   birthDate: string;
   cpf: string;
@@ -173,6 +181,49 @@ function todayLocal(): string {
 
 function uppercaseText(value: string): string {
   return value.trim().toLocaleUpperCase("pt-BR");
+}
+
+function generateAccessPin(): string {
+  const digits = Array.from({ length: 10 }, (_, index) => index);
+  const values = new Uint32Array(4);
+  crypto.getRandomValues(values);
+  let pin = "";
+  for (let index = 0; index < 4; index += 1) {
+    const selected = values[index]! % digits.length;
+    pin += String(digits.splice(selected, 1)[0]!);
+  }
+  return pin;
+}
+
+export async function uploadProfilePhoto(personId: string, file: File): Promise<string> {
+  const firebase = requireFirebase();
+  if (!file.type.startsWith("image/")) throw new Error("Selecione um arquivo de imagem.");
+  if (file.size > 5 * 1024 * 1024) throw new Error("A foto deve ter no máximo 5 MB.");
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("Não foi possível ler a imagem."));
+      image.src = objectUrl;
+    });
+    const avatarSize = 240;
+    const sourceSize = Math.min(image.naturalWidth, image.naturalHeight);
+    const sourceX = (image.naturalWidth - sourceSize) / 2;
+    const sourceY = (image.naturalHeight - sourceSize) / 2;
+    const canvas = document.createElement("canvas");
+    canvas.width = avatarSize;
+    canvas.height = avatarSize;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Não foi possível preparar a foto.");
+    context.drawImage(image, sourceX, sourceY, sourceSize, sourceSize, 0, 0, avatarSize, avatarSize);
+    const profilePhotoUrl = canvas.toDataURL("image/jpeg", 0.72);
+    if (profilePhotoUrl.length > 250_000) throw new Error("A foto ficou muito grande. Escolha outra imagem.");
+    await updateDoc(doc(firebase.db, "people", personId), { profilePhotoUrl, profilePhotoPath: null, updatedAt: serverTimestamp() });
+    return profilePhotoUrl;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
 }
 
 async function sha256(value: string): Promise<string> {
@@ -233,12 +284,14 @@ export async function changePassword(user: User, currentPassword: string, newPas
   await updatePassword(user, newPassword);
 }
 
-export async function registerStudent(input: StudentRegistrationInput): Promise<void> {
+export async function registerStudent(input: StudentRegistrationInput): Promise<{ personId: string; accessPin: string; guardianPin?: string }> {
   const firebase = requireFirebase();
   const age = ageOn(input.birthDate, todayLocal());
   const minor = age < 18;
   const cpfDigits = normalizeCpf(input.cpf);
   const guardianCpf = input.guardian ? normalizeCpf(input.guardian.cpf) : "";
+  const accessPin = generateAccessPin();
+  const guardianPin = input.guardian ? generateAccessPin() : undefined;
   if ((!minor || cpfDigits) && !isValidCpf(cpfDigits)) throw new Error("CPF do aluno inválido.");
   if (!isValidMobilePhone(input.phone)) throw new Error("Telefone do aluno inválido.");
   if (!isValidMobilePhone(input.whatsapp)) throw new Error("WhatsApp do aluno inválido.");
@@ -290,6 +343,7 @@ export async function registerStudent(input: StudentRegistrationInput): Promise<
         status: "ATIVA",
         ageBand: age < 15 ? "ATE_14" : age < 18 ? "15_A_17" : "ADULTO",
         registrationSource: "SELF_SERVICE",
+        accessPin,
         createdAt: now,
         createdBy: uid,
         updatedAt: now,
@@ -331,6 +385,7 @@ export async function registerStudent(input: StudentRegistrationInput): Promise<
             roles: ["RESPONSAVEL"],
             status: "ATIVA",
             registrationSource: "STUDENT_ONBOARDING",
+            accessPin: guardianPin,
             createdAt: now,
             createdBy: uid,
             updatedAt: now,
@@ -350,6 +405,7 @@ export async function registerStudent(input: StudentRegistrationInput): Promise<
             cpfFormatted: formatCpf(guardianCpf),
             phone: formatPhone(input.guardian.phone),
             address: uppercaseText(input.guardian.address),
+            accessPin: guardianPin,
           },
           createdAt: now,
         });
@@ -372,9 +428,11 @@ export async function registerStudent(input: StudentRegistrationInput): Promise<
     await deleteUser(credential.user).catch(() => undefined);
     throw error;
   }
+  if (input.photo) await uploadProfilePhoto(uid, input.photo);
+  return { personId: uid, accessPin, guardianPin };
 }
 
-export async function createStudent(payload: CreateStudentPayload): Promise<{ personId: string }> {
+export async function createStudent(payload: CreateStudentPayload): Promise<{ personId: string; accessPin: string; guardianPin?: string }> {
   const { auth, db } = requireFirebase();
   if (!auth.currentUser) throw new Error("Sessão expirada. Entre novamente.");
   const age = ageOn(payload.person.birthDate, todayLocal());
@@ -388,6 +446,8 @@ export async function createStudent(payload: CreateStudentPayload): Promise<{ pe
   if (phone && !isValidMobilePhone(phone)) throw new Error("Telefone para ligação inválido.");
   if (whatsapp && !isValidMobilePhone(whatsapp)) throw new Error("WhatsApp inválido.");
   const guardianCpf = payload.guardian ? normalizeCpf(payload.guardian.cpf) : "";
+  const accessPin = generateAccessPin();
+  const guardianPin = payload.guardian ? generateAccessPin() : undefined;
   if (guardianCpf && !isValidCpf(guardianCpf)) throw new Error("CPF do responsável inválido.");
   if (studentCpf && guardianCpf === studentCpf) throw new Error("Aluno e responsável não podem usar o mesmo CPF.");
 
@@ -429,6 +489,7 @@ export async function createStudent(payload: CreateStudentPayload): Promise<{ pe
       status: "ATIVA",
       ageBand: age < 15 ? "ATE_14" : age < 18 ? "15_A_17" : "ADULTO",
       requiresAdultTerm: false,
+      accessPin,
       createdAt: now,
       createdBy: actorUid,
       updatedAt: now,
@@ -462,7 +523,7 @@ export async function createStudent(payload: CreateStudentPayload): Promise<{ pe
       guardianPersonId = resolvedGuardianRef.id;
       relationship = uppercaseText(payload.guardian.relationship);
       if (existingGuardianFound) {
-        transaction.update(resolvedGuardianRef, { roles: arrayUnion("RESPONSAVEL"), updatedAt: now });
+        transaction.update(resolvedGuardianRef, { roles: arrayUnion("RESPONSAVEL"), accessPin: guardianPin, updatedAt: now });
       } else {
         transaction.set(resolvedGuardianRef, {
         personId: resolvedGuardianRef.id,
@@ -475,6 +536,7 @@ export async function createStudent(payload: CreateStudentPayload): Promise<{ pe
         email: null,
         roles: ["RESPONSAVEL"],
         status: "ATIVA",
+        accessPin: guardianPin,
         createdAt: now,
         createdBy: actorUid,
         updatedAt: now,
@@ -490,6 +552,7 @@ export async function createStudent(payload: CreateStudentPayload): Promise<{ pe
         relationship,
         status: "ATIVO",
         historicallyLinked: true,
+        guardianSnapshot: { fullName: uppercaseText(payload.guardian!.fullName), cpfFormatted: formatCpf(guardianCpf), accessPin: guardianPin },
         createdAt: now,
       });
     }
@@ -504,7 +567,8 @@ export async function createStudent(payload: CreateStudentPayload): Promise<{ pe
     });
   });
 
-  return { personId: personRef.id };
+  if (payload.photo) await uploadProfilePhoto(personRef.id, payload.photo);
+  return { personId: personRef.id, accessPin, guardianPin };
 }
 
 export function watchPeople(onData: (people: PersonRow[]) => void, onError: (message: string) => void): Unsubscribe {
@@ -585,6 +649,7 @@ export function watchStudentDirectory(onData: (students: StudentDirectoryRow[]) 
             phone: String(guardianPerson?.phone || snapshot.phone || "") || undefined,
             address: String(guardianPerson?.address || snapshot.address || "") || undefined,
             relationship: String(link.relationship || ""),
+            accessPin: String(guardianPerson?.accessPin || snapshot.accessPin || "") || undefined,
           } : undefined,
         } as StudentDirectoryRow;
       })
@@ -805,19 +870,43 @@ export async function createStudentNote(personId: string, text: string): Promise
   await setDoc(noteRef, { noteId: noteRef.id, personId, text: uppercaseText(text), createdBy: auth.currentUser.uid, createdAt: serverTimestamp() });
 }
 
-export async function sendInAppMessage(personId: string, text: string): Promise<void> {
+export async function sendInAppMessage(personId: string, text: string, title = "COMUNICADO"): Promise<void> {
   const { auth, db } = requireFirebase();
   if (!auth.currentUser) throw new Error("Sessão expirada.");
   const messageRef = doc(collection(db, "messages"));
   await setDoc(messageRef, {
     messageId: messageRef.id,
     personId,
+    title: uppercaseText(title),
     text: uppercaseText(text),
     channel: "IN_APP",
     status: "ENVIADA",
     sentBy: auth.currentUser.uid,
     sentAt: serverTimestamp(),
   });
+}
+
+export async function sendBulkInAppMessage(personIds: string[], title: string, text: string): Promise<void> {
+  const { auth, db } = requireFirebase();
+  if (!auth.currentUser) throw new Error("Sessão expirada.");
+  const uniqueIds = [...new Set(personIds.filter(Boolean))];
+  if (!uniqueIds.length) throw new Error("Selecione pelo menos um aluno.");
+  if (!text.trim()) throw new Error("Escreva a mensagem.");
+  const batch = writeBatch(db);
+  uniqueIds.forEach((personId) => {
+    const messageRef = doc(collection(db, "messages"));
+    batch.set(messageRef, { messageId: messageRef.id, personId, title: uppercaseText(title || "COMUNICADO"), text: uppercaseText(text), channel: "IN_APP", status: "ENVIADA", sentBy: auth.currentUser!.uid, sentAt: serverTimestamp() });
+  });
+  await batch.commit();
+}
+
+export async function markMessagesRead(messageIds: string[]): Promise<void> {
+  const { db } = requireFirebase();
+  const ids = [...new Set(messageIds.filter(Boolean))];
+  if (!ids.length) return;
+  const batch = writeBatch(db);
+  ids.forEach((id) => batch.update(doc(db, "messages", id), { status: "LIDA", readAt: serverTimestamp() }));
+  await batch.commit();
 }
 
 export function watchStudentMessages(personId: string, onData: (items: StudentMessage[]) => void, onError: (message: string) => void): Unsubscribe {
