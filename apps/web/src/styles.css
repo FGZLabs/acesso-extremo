@@ -315,6 +315,11 @@ th { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spa
 .registration-success { text-align: center; }
 .registration-success .pin-result { text-align: left; }
 .success-icon { width: 62px; height: 62px; margin: 0 auto 15px; display: grid; place-items: center; border-radius: 50%; background: #ecfdf3; color: var(--success); font-size: 30px; font-weight: 900; }
+.success-icon.error { background: #fff0f0; color: #b42318; }
+.verification-card { text-align: center; }
+.verification-card > p { color: var(--muted); line-height: 1.55; }
+.verification-card .notice-icon { margin-bottom: 14px; }
+.password-action-form { display: grid; gap: 14px; margin-top: 18px; text-align: left; }
 
 @media (max-width: 1100px) {
   .dashboard-grid, .portal-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

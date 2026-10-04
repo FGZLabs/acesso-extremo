@@ -9,8 +9,13 @@ service cloud.firestore {
     function isTestProfessor() { return signedIn() && request.auth.token.email == 'teste@gmail.com'; }
     function isProfessor() { return signedIn() && (request.auth.token.professor == true || accountRoles().hasAny(['PROFESSOR']) || isTestProfessor()); }
     function isStaff() { return isAdmin() || isProfessor(); }
+    function accountActivated() {
+      return !hasAccount()
+        || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.emailVerificationRequired != true
+        || request.auth.token.email_verified == true;
+    }
     function ownPerson(personId) {
-      return signedIn() && (
+      return signedIn() && accountActivated() && (
         request.auth.uid == personId ||
         (hasAccount() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.personId == personId)
       );
@@ -111,6 +116,7 @@ service cloud.firestore {
     match /termAcceptances/{acceptanceId} {
       allow read: if isStaff() || ownPerson(resource.data.personId) || ownPerson(resource.data.guardianPersonId);
       allow create: if signedIn()
+        && accountActivated()
         && request.resource.data.personId == request.auth.uid
         && request.resource.data.actorUid == request.auth.uid
         && request.resource.data.accepted == true;
@@ -120,6 +126,7 @@ service cloud.firestore {
     match /beltChangeRequests/{requestId} {
       allow read: if isStaff() || ownPerson(resource.data.personId);
       allow create: if signedIn()
+        && accountActivated()
         && request.resource.data.personId == request.auth.uid
         && request.resource.data.requestedBy == request.auth.uid
         && request.resource.data.status == 'PENDENTE';
@@ -129,7 +136,7 @@ service cloud.firestore {
 
     match /absenceJustifications/{justificationId} {
       allow read: if isStaff() || ownPerson(resource.data.personId);
-      allow create: if signedIn() && request.resource.data.personId == request.auth.uid && request.resource.data.authorUid == request.auth.uid;
+      allow create: if signedIn() && accountActivated() && request.resource.data.personId == request.auth.uid && request.resource.data.authorUid == request.auth.uid;
       allow update: if isStaff() || (ownPerson(resource.data.personId) && request.resource.data.personId == resource.data.personId);
       allow delete: if false;
     }

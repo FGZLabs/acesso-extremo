@@ -28,7 +28,7 @@ export function StudentOnboarding({ onBack }: { onBack: () => void }) {
   const [pending, setPending] = useState<Omit<StudentRegistrationInput, "acceptance"> | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const [completed, setCompleted] = useState<{ accessPin: string; guardianPin?: string } | null>(null);
+  const [completed, setCompleted] = useState<{ accessPin: string; guardianPin?: string; verificationSent: boolean } | null>(null);
   const age = useMemo(() => {
     try { return birthDate ? ageOn(birthDate, todayLocal()) : null; } catch { return null; }
   }, [birthDate]);
@@ -123,7 +123,7 @@ export function StudentOnboarding({ onBack }: { onBack: () => void }) {
         </form>
       </main>
       {pending && <TermsModal signerName={minor ? pending.guardian?.fullName || "" : pending.fullName} minor={minor} onCancel={() => setPending(null)} onAccept={(name) => void accept(name)} />}
-      {completed && <div className="modal-backdrop"><section className="modal-card compact-modal registration-success"><div className="success-icon">✓</div><span className="eyebrow">CADASTRO CONCLUÍDO</span><h2>Seu cadastro foi realizado com sucesso</h2><p>Agora você já pode entrar no portal usando o e-mail e a senha cadastrados.</p>{completed.accessPin && <div className="pin-result"><span>PIN do aluno</span><strong>{completed.accessPin}</strong></div>}{completed.guardianPin && <div className="pin-result"><span>PIN do responsável</span><strong>{completed.guardianPin}</strong></div>}<button type="button" className="primary onboarding-submit" onClick={onBack}>Fazer login</button></section></div>}
+      {completed && <div className="modal-backdrop"><section className="modal-card compact-modal registration-success"><div className="success-icon">✓</div><span className="eyebrow">CADASTRO CONCLUÍDO</span><h2>Confirme seu endereço de e-mail</h2><p>{completed.verificationSent ? "Enviamos um link de ativação para o e-mail informado. Abra a mensagem e toque no link para liberar o acesso ao PWA." : "Seu cadastro foi salvo, mas o e-mail de ativação não pôde ser enviado agora. Use o botão abaixo, tente entrar e solicite um novo envio."}</p>{completed.accessPin && <div className="pin-result"><span>PIN do aluno</span><strong>{completed.accessPin}</strong></div>}{completed.guardianPin && <div className="pin-result"><span>PIN do responsável</span><strong>{completed.guardianPin}</strong></div>}<button type="button" className="primary onboarding-submit" onClick={onBack}>Fazer login</button></section></div>}
     </div>
   );
 }

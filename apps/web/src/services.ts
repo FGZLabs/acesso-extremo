@@ -5,6 +5,7 @@ import {
   EmailAuthProvider,
   getIdTokenResult,
   reauthenticateWithCredential,
+  sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   updatePassword,
@@ -57,7 +58,7 @@ export interface CreateStudentPayload {
 }
 
 export interface SessionProfile {
-  kind: "ADMIN" | "PROFESSOR" | "STUDENT" | "UNLINKED";
+  kind: "ADMIN" | "PROFESSOR" | "STUDENT" | "UNVERIFIED" | "UNLINKED";
   personId?: string;
   displayName: string;
 }
@@ -285,6 +286,13 @@ export async function loadSessionProfile(user: User): Promise<SessionProfile> {
     if (account.exists()) {
       const data = account.data();
       const roles = Array.isArray(data.roles) ? data.roles.map(String) : [];
+      if (roles.includes("ALUNO") && data.emailVerificationRequired === true && !user.emailVerified) {
+        return {
+          kind: "UNVERIFIED",
+          personId: String(data.personId || user.uid),
+          displayName: String(data.displayName || user.displayName || user.email || "Aluno"),
+        };
+      }
       return {
         kind: roles.includes("PROFESSOR") ? "PROFESSOR" : "STUDENT",
         personId: String(data.personId || user.uid),
@@ -302,6 +310,15 @@ export async function requestPasswordReset(email: string): Promise<void> {
   await sendPasswordResetEmail(auth, email, { url: `${window.location.origin}/?portal=aluno` });
 }
 
+export async function sendAccountVerification(user: User): Promise<void> {
+  const { auth } = requireFirebase();
+  auth.languageCode = "pt-BR";
+  await sendEmailVerification(user, {
+    url: `${window.location.origin}/?portal=aluno&emailVerified=1`,
+    handleCodeInApp: false,
+  });
+}
+
 export async function changePassword(user: User, currentPassword: string, newPassword: string): Promise<void> {
   if (!user.email) throw new Error("Esta conta não possui e-mail para reautenticação.");
   if (newPassword.length < 8) throw new Error("A nova senha deve ter pelo menos 8 caracteres.");
@@ -309,7 +326,7 @@ export async function changePassword(user: User, currentPassword: string, newPas
   await updatePassword(user, newPassword);
 }
 
-export async function registerStudent(input: StudentRegistrationInput): Promise<{ personId: string; accessPin: string; guardianPin?: string }> {
+export async function registerStudent(input: StudentRegistrationInput): Promise<{ personId: string; accessPin: string; guardianPin?: string; verificationSent: boolean }> {
   const firebase = requireFirebase();
   const age = ageOn(input.birthDate, todayLocal());
   const minor = age < 18;
@@ -341,9 +358,17 @@ export async function registerStudent(input: StudentRegistrationInput): Promise<
     if (existingAccount.exists()) {
       const personId = String(existingAccount.data().personId || credential.user.uid);
       const existingPerson = await getDoc(doc(firebase.db, "people", personId));
+      await updateDoc(doc(firebase.db, "users", credential.user.uid), {
+        emailVerificationRequired: true,
+        updatedAt: serverTimestamp(),
+      });
+      const verificationSent = credential.user.emailVerified
+        ? true
+        : await sendAccountVerification(credential.user).then(() => true).catch(() => false);
       return {
         personId,
         accessPin: String(existingPerson.data()?.accessPin || ""),
+        verificationSent,
       };
     }
     // Recupera uma tentativa anterior que criou o login, mas não concluiu a ficha.
@@ -370,6 +395,7 @@ export async function registerStudent(input: StudentRegistrationInput): Promise<
         displayName: cleanText(input.fullName),
         roles: ["ALUNO"],
         onboardingStatus: "CONCLUIDO",
+        emailVerificationRequired: true,
         createdAt: now,
         updatedAt: now,
       });
@@ -473,7 +499,8 @@ export async function registerStudent(input: StudentRegistrationInput): Promise<
     throw error;
   }
   if (input.photo) await uploadProfilePhoto(uid, input.photo).catch(() => undefined);
-  return { personId: uid, accessPin, guardianPin };
+  const verificationSent = await sendAccountVerification(credential.user).then(() => true).catch(() => false);
+  return { personId: uid, accessPin, guardianPin, verificationSent };
 }
 
 export async function createStudent(payload: CreateStudentPayload): Promise<{ personId: string; accessPin: string; guardianPin?: string }> {
