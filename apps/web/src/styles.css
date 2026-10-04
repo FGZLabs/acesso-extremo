@@ -222,14 +222,31 @@ th { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spa
 .attendance-legend span { display: flex; align-items: center; gap: 5px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .dot.present { background: #22a447; }.dot.absent { background: #df3e3e; }.dot.extra { background: #3d77dc; }
+.attendance-summary { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+.attendance-summary div { min-width: 105px; padding: 11px 13px; border: 1px solid var(--line); border-radius: 11px; background: #f8fafc; display: grid; gap: 3px; }
+.attendance-summary span { color: var(--muted); font-size: 9px; text-transform: uppercase; font-weight: 800; }
+.attendance-summary strong { font-size: 17px; }
 .attendance-calendar { margin-top: 22px; display: grid; grid-template-columns: repeat(7, minmax(66px, 1fr)); gap: 8px; }
 .attendance-day { min-height: 86px; position: relative; padding: 9px; border: 1px solid var(--line); border-radius: 12px; display: grid; align-content: space-between; background: #fff; }
-.attendance-day span { font-size: 8px; color: var(--muted); }.attendance-day strong { font-size: 19px; }.attendance-day em { font-style: normal; font-size: 10px; font-weight: 900; }
-.attendance-day button { position: absolute; right: 6px; bottom: 6px; border: 0; background: rgba(255,255,255,.75); border-radius: 6px; cursor: pointer; }
+.attendance-day span { font-size: 8px; color: var(--muted); }.attendance-day strong { font-size: 19px; }.attendance-day em { font-style: normal; font-size: 9px; font-weight: 900; }
+.attendance-day small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; font-size: 8px; color: var(--muted); }
+.attendance-actions { position: absolute; right: 5px; bottom: 5px; display: flex; gap: 3px; }
+.attendance-day button { border: 0; background: rgba(255,255,255,.82); border-radius: 6px; cursor: pointer; min-width: 22px; min-height: 22px; }
+.attendance-day button.manual-attendance { color: #174ea6; font-weight: 900; }
 .status-p { background: #ecfdf3; border-color: #b7e7c6; color: #137333; }.status-f { background: #fff1f1; border-color: #f5c2c2; color: #b42318; }.status-extra { background: #eef4ff; border-color: #cbdaf8; color: #2557ad; }
+.status-none { background: #f8fafc; color: #64748b; }
 .attendance-note { margin: 16px 0 0; color: var(--muted); font-size: 11px; }
+.attendance-note strong { color: #334155; }
+.modal-explanation { margin: -4px 0 16px; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .justification-text { padding: 16px; border-radius: 10px; background: #f6f8fb; line-height: 1.6; }
 .student-picker { min-width: 280px; }
+.calendar-layout { display: grid; grid-template-columns: minmax(280px, .75fr) minmax(420px, 1.25fr); gap: 18px; align-items: start; }
+.calendar-form, .calendar-list { padding: 24px; }
+.calendar-form h2, .calendar-list h2 { margin: 5px 0 8px; }
+.calendar-form > p, .calendar-rule { margin: 0 0 20px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.calendar-form { display: grid; gap: 14px; }
+.calendar-list .request-list { margin-top: 18px; }
+.danger-text { color: #b42318; }
 .request-list { display: grid; gap: 10px; }
 .request-list article { padding: 15px; border: 1px solid var(--line); border-radius: 12px; display: flex; justify-content: space-between; gap: 20px; align-items: center; }
 .request-list strong, .request-list span { display: block; }.request-list span { margin-top: 4px; color: var(--blue); font-weight: 800; }.request-list p { margin: 7px 0 0; color: var(--muted); font-size: 11px; }
@@ -255,7 +272,7 @@ th { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spa
   .student-header { flex-wrap: wrap; gap: 10px; }
   .student-nav { order: 3; width: 100%; overflow-x: auto; margin-left: 0; }
   .student-logout { margin-left: auto; }
-  .manage-grid, .profile-layout { grid-template-columns: 1fr; }
+  .manage-grid, .profile-layout, .calendar-layout { grid-template-columns: 1fr; }
   .attendance-calendar { grid-template-columns: repeat(4, minmax(60px,1fr)); }
 }
 

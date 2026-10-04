@@ -156,7 +156,22 @@ service cloud.firestore {
 
     match /dailyAttendance/{attendanceId} {
       allow read: if isStaff() || ownPerson(resource.data.personId);
-      allow write: if false;
+      allow create: if isStaff()
+        && request.resource.data.personId is string
+        && request.resource.data.date is string
+        && request.resource.data.attendanceId == attendanceId;
+      allow update: if isStaff()
+        && request.resource.data.personId == resource.data.personId
+        && request.resource.data.date == resource.data.date
+        && request.resource.data.attendanceId == attendanceId;
+      allow delete: if isStaff();
+    }
+    match /academyDays/{date} {
+      allow read: if signedIn();
+      allow create, update: if isStaff()
+        && request.resource.data.date == date
+        && request.resource.data.kind in ['HOLIDAY', 'CANCELED', 'EXTRA'];
+      allow delete: if isStaff();
     }
     match /accessEvents/{eventId} {
       allow read: if isStaff() || ownPerson(resource.data.personId);

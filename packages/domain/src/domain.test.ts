@@ -72,6 +72,10 @@ describe("frequência", () => {
     expect(classifyAttendanceDay({ birthDate: "2014-01-01", date: "2026-09-28", holiday: true })).toBe("NONE");
   });
 
+  it("não prevê falta quando o treino foi cancelado", () => {
+    expect(classifyAttendanceDay({ birthDate: "2000-01-01", date: "2026-10-01", academyClosed: true })).toBe("NONE");
+  });
+
   it("considera OpenMat no sábado como presença extra", () => {
     expect(classifyAttendanceDay({ birthDate: "2014-01-01", date: "2026-09-26", openMat: true })).toBe("EXTRA");
   });

@@ -1,4 +1,4 @@
-import { ageOn, formatCpf, formatPhone, isValidCpf, isValidMobilePhone, normalizeCpf } from "@academia/domain";
+import { ageOn, dailyAttendanceId, formatCpf, formatPhone, isValidCpf, isValidMobilePhone, normalizeCpf } from "@academia/domain";
 import {
   createUserWithEmailAndPassword,
   deleteUser,
@@ -12,6 +12,7 @@ import {
 import {
   arrayUnion,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   limit,
@@ -112,6 +113,20 @@ export interface DailyAttendanceRow {
   personId: string;
   date: string;
   kind?: string;
+  manual?: boolean;
+}
+
+export type AcademyDayKind = "HOLIDAY" | "CANCELED" | "EXTRA";
+
+export interface AcademyDayRow {
+  id: string;
+  date: string;
+  kind: AcademyDayKind;
+  title: string;
+  details?: string;
+  closed: boolean;
+  holiday: boolean;
+  optionalEvent: boolean;
 }
 
 export interface StudentMessage {
@@ -656,6 +671,61 @@ export function watchDailyAttendance(personId: string, onData: (items: DailyAtte
   return onSnapshot(query(collection(db, "dailyAttendance"), where("personId", "==", personId), limit(100)), (snapshot) => {
     onData(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as DailyAttendanceRow)));
   }, (error) => onError(error.message));
+}
+
+export function watchAcademyDays(onData: (items: AcademyDayRow[]) => void, onError: (message: string) => void): Unsubscribe {
+  const { db } = requireFirebase();
+  return onSnapshot(query(collection(db, "academyDays"), limit(500)), (snapshot) => {
+    const items = snapshot.docs
+      .map((item) => ({ id: item.id, ...item.data() } as AcademyDayRow))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    onData(items);
+  }, (error) => onError(error.message));
+}
+
+export async function saveAcademyDay(input: { date: string; kind: AcademyDayKind; title: string; details?: string }): Promise<void> {
+  const { auth, db } = requireFirebase();
+  if (!auth.currentUser) throw new Error("Sessão expirada.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) throw new Error("Informe uma data válida.");
+  if (!input.title.trim()) throw new Error("Informe o nome do evento.");
+  await setDoc(doc(db, "academyDays", input.date), {
+    eventId: input.date,
+    date: input.date,
+    kind: input.kind,
+    title: uppercaseText(input.title),
+    details: uppercaseText(input.details || "") || null,
+    closed: input.kind === "HOLIDAY" || input.kind === "CANCELED",
+    holiday: input.kind === "HOLIDAY",
+    optionalEvent: input.kind === "EXTRA",
+    openMat: false,
+    updatedBy: auth.currentUser.uid,
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+}
+
+export async function removeAcademyDay(date: string): Promise<void> {
+  const { db } = requireFirebase();
+  await deleteDoc(doc(db, "academyDays", date));
+}
+
+export async function setManualAttendance(personId: string, date: string, kind: "SCHEDULED" | "EXTRA", present: boolean): Promise<void> {
+  const { auth, db } = requireFirebase();
+  if (!auth.currentUser) throw new Error("Sessão expirada.");
+  const attendanceRef = doc(db, "dailyAttendance", dailyAttendanceId(personId, date));
+  if (!present) {
+    await deleteDoc(attendanceRef);
+    return;
+  }
+  await setDoc(attendanceRef, {
+    attendanceId: dailyAttendanceId(personId, date),
+    personId,
+    date,
+    kind,
+    extra: kind === "EXTRA",
+    manual: true,
+    recordedBy: auth.currentUser.uid,
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
 }
 
 export async function staffUpdateStudent(personId: string, input: { fullName: string; phone: string; whatsapp: string; address: string; professorPersonId: string }): Promise<void> {
