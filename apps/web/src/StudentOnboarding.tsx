@@ -89,7 +89,7 @@ export function StudentOnboarding({ onBack }: { onBack: () => void }) {
           <div className="form-section"><h3>Dados pessoais</h3><div className="form-grid">
             <label className="field required first-field"><span>Data de nascimento</span><input className="date-input" type="date" value={birthDate} required onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => setBirthDate(event.target.value)} /></label>
             {birthDate && <>
-              <label className="field wide"><span>Foto de perfil (opcional)</span><input type="file" accept="image/*" capture="user" onChange={(event) => setPhoto(event.target.files?.[0] || null)} /><small>Você poderá alterar a foto depois. Máximo de 5 MB.</small></label>
+              <label className="field wide"><span>Foto de perfil (opcional)</span><input type="file" accept="image/*" onChange={(event) => setPhoto(event.target.files?.[0] || null)} /><small>Tire uma foto ou escolha da galeria. Máximo de 5 MB.</small></label>
               <label className="field wide required"><span>Nome completo</span><input className="uppercase-input" name="fullName" minLength={3} required /></label>
               <label className={`field ${minor ? "" : "required"}`}><span>CPF {minor && "(opcional para menor)"}</span><input inputMode="numeric" value={cpf} required={!minor} placeholder="000.000.000-00" onChange={(event) => setCpf(formatCpf(event.target.value))} /></label>
               <label className="field required"><span>Telefone para ligação via operadora</span><input type="tel" inputMode="numeric" value={phone} required placeholder="(00) 00000-0000" onChange={(event) => setPhone(formatPhone(event.target.value))} /></label>

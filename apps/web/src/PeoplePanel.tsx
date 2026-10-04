@@ -22,6 +22,26 @@ function ageOf(birthDate: string): string {
   try { return `${ageOn(birthDate, todayLocal())} anos`; } catch { return "—"; }
 }
 
+function isAdultStudent(birthDate: string): boolean {
+  try { return ageOn(birthDate, todayLocal()) >= 18; } catch { return false; }
+}
+
+function displayDate(value?: string): string {
+  if (!value) return "Nenhum lançamento";
+  const [year, month, day] = value.split("-");
+  return year && month && day ? `${day}/${month}/${year}` : value;
+}
+
+function displayMoney(value?: number): string {
+  return typeof value === "number" ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value) : "";
+}
+
+function whatsappHref(value?: string): string | undefined {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (digits.length < 10) return undefined;
+  return `https://wa.me/${digits.startsWith("55") ? digits : `55${digits}`}`;
+}
+
 function monthlyStatus(student: StudentDirectoryRow): "EM DIA" | "ATRASADA" {
   return student.validUntil && student.validUntil >= todayLocal() ? "EM DIA" : "ATRASADA";
 }
@@ -80,9 +100,10 @@ export function PeoplePanel({ role = "ADMIN" }: { role?: "ADMIN" | "PROFESSOR" }
     try {
       let paymentValidity = "";
       if (action === "PAYMENT") {
-        const result = await createExternalReceipt(selected.personId, Number(data.get("amount")), String(data.get("method")), String(data.get("text")));
+        const amount = Number(data.get("amount"));
+        const result = await createExternalReceipt(selected.personId, amount, String(data.get("method")), String(data.get("text")));
         paymentValidity = result.validUntil;
-        setSelected({ ...selected, enrollmentStatus: "ATIVA", validUntil: result.validUntil });
+        setSelected({ ...selected, enrollmentStatus: "ATIVA", validUntil: result.validUntil, lastPaymentDate: todayLocal(), lastPaymentAmount: amount });
       }
       if (action === "MESSAGE") await sendInAppMessage(selected.personId, String(data.get("text")));
       if (action === "NOTE") await createStudentNote(selected.personId, String(data.get("text")));
@@ -129,10 +150,10 @@ export function PeoplePanel({ role = "ADMIN" }: { role?: "ADMIN" | "PROFESSOR" }
           })}
           {!filtered.length && <tr><td colSpan={7}><div className="empty-state"><strong>Nenhum aluno encontrado</strong><p>O próprio aluno pode se cadastrar pelo link público ou você pode usar “Cadastrar aluno”.</p></div></td></tr>}
         </tbody></table></div>
-        <div className="student-card-list">{filtered.map((student) => { const payment = monthlyStatus(student); return <article className="student-mobile-card" key={student.personId}><div className="student-card-header">{student.profilePhotoUrl ? <img className="mini-avatar photo" src={student.profilePhotoUrl} alt="" /> : <span className="mini-avatar">{initials(student.fullName)}</span>}<div><strong>{student.fullName}</strong><small>{student.currentBelt} · {ageOf(student.birthDate)}</small></div><span className={`status-pill ${payment === "EM DIA" ? "online" : "danger"}`}>{payment}</span></div><dl><div><dt>Professor</dt><dd>{student.professorName}</dd></div><div><dt>Responsável</dt><dd>{student.guardian ? <button className="guardian-button" onClick={() => setGuardian(student.guardian)}>ⓘ {student.guardian.fullName}</button> : "—"}</dd></div></dl><button className="primary student-card-manage" onClick={() => setSelected(student)}>Gerenciar aluno</button></article>; })}{!filtered.length && <div className="empty-state"><strong>Nenhum aluno encontrado</strong></div>}</div>
+        <div className="student-card-list">{filtered.map((student) => { const payment = monthlyStatus(student); const adult = isAdultStudent(student.birthDate); const studentWhatsApp = whatsappHref(student.whatsapp); const guardianWhatsApp = whatsappHref(student.guardian?.phone); return <article className="student-mobile-card" key={student.personId}><div className="student-card-header">{student.profilePhotoUrl ? <img className="mini-avatar photo" src={student.profilePhotoUrl} alt="" /> : <span className="mini-avatar">{initials(student.fullName)}</span>}<div><strong>{student.fullName}</strong><small>{student.currentBelt} · {ageOf(student.birthDate)}</small>{studentWhatsApp && <a className="whatsapp-link" href={studentWhatsApp} target="_blank" rel="noreferrer" aria-label={`Abrir WhatsApp de ${student.fullName}`}>◉ WhatsApp</a>}</div><span className={`status-pill ${payment === "EM DIA" ? "online" : "danger"}`}>{payment}</span></div><dl><div><dt>Professor</dt><dd>{student.professorName}</dd></div>{adult ? <div><dt>Último pagamento</dt><dd>{displayDate(student.lastPaymentDate)} {displayMoney(student.lastPaymentAmount)}</dd></div> : <div><dt>Responsável</dt><dd>{student.guardian ? <><button className="guardian-button" onClick={() => setGuardian(student.guardian)}>ⓘ {student.guardian.fullName}</button>{guardianWhatsApp && <a className="whatsapp-icon-link" href={guardianWhatsApp} target="_blank" rel="noreferrer" aria-label={`Abrir WhatsApp de ${student.guardian.fullName}`}>◉</a>}</> : "—"}</dd></div>}</dl><button className="primary student-card-manage" onClick={() => setSelected(student)}>Gerenciar aluno</button></article>; })}{!filtered.length && <div className="empty-state"><strong>Nenhum aluno encontrado</strong></div>}</div>
       </div>
 
-      {guardian && <div className="modal-backdrop"><section className="modal-card compact-modal"><div className="modal-header"><div><span className="eyebrow">RESPONSÁVEL</span><h2>{guardian.fullName}</h2></div><button className="modal-close" onClick={() => setGuardian(null)}>×</button></div><dl className="detail-list"><div><dt>Parentesco</dt><dd>{guardian.relationship}</dd></div><div><dt>CPF</dt><dd>{guardian.cpfFormatted || "Não informado"}</dd></div><div><dt>Telefone</dt><dd>{guardian.phone || "Não informado"}</dd></div><div><dt>Endereço</dt><dd>{guardian.address || "Não informado"}</dd></div><div><dt>PIN de acesso</dt><dd>{guardian.accessPin || "Gerado apenas nos novos cadastros"}</dd></div></dl></section></div>}
+      {guardian && <div className="modal-backdrop"><section className="modal-card compact-modal"><div className="modal-header"><div><span className="eyebrow">RESPONSÁVEL</span><h2>{guardian.fullName}</h2></div><button className="modal-close" onClick={() => setGuardian(null)}>×</button></div><dl className="detail-list"><div><dt>Parentesco</dt><dd>{guardian.relationship}</dd></div><div><dt>CPF</dt><dd>{guardian.cpfFormatted || "Não informado"}</dd></div><div><dt>Telefone</dt><dd>{whatsappHref(guardian.phone) ? <a className="whatsapp-link" href={whatsappHref(guardian.phone)} target="_blank" rel="noreferrer">◉ {guardian.phone}</a> : guardian.phone || "Não informado"}</dd></div><div><dt>Endereço</dt><dd>{guardian.address || "Não informado"}</dd></div><div><dt>PIN de acesso</dt><dd>{guardian.accessPin || "Gerado apenas nos novos cadastros"}</dd></div></dl></section></div>}
 
       {selected && <div className="modal-backdrop"><section className="modal-card student-manage-modal"><div className="modal-header"><div><span className="eyebrow">{role === "ADMIN" ? "ADMINISTRAÇÃO" : "PROFESSOR"}</span><h2>{selected.fullName}</h2></div><button className="modal-close" onClick={() => setSelected(null)}>×</button></div><div className="manage-grid">
         <form className="manage-section" onSubmit={saveEdit}><h3>Dados do aluno</h3><div className="form-grid"><label className="field wide required"><span>Nome</span><input className="uppercase-input" name="fullName" defaultValue={selected.fullName} required /></label><label className="field"><span>CPF</span><input value={selected.cpfFormatted || ""} disabled /></label><label className="field"><span>E-mail</span><input value={selected.email || ""} disabled /></label><label className="field"><span>PIN de acesso</span><input value={selected.accessPin || "Gerado apenas nos novos cadastros"} disabled /></label><label className="field"><span>Telefone</span><input name="phone" defaultValue={selected.phone || ""} onChange={(event) => { event.currentTarget.value = formatPhone(event.currentTarget.value); }} /></label><label className="field"><span>WhatsApp</span><input name="whatsapp" defaultValue={selected.whatsapp || ""} onChange={(event) => { event.currentTarget.value = formatPhone(event.currentTarget.value); }} /></label><label className="field wide"><span>Endereço</span><input className="uppercase-input" name="address" defaultValue={selected.address || ""} /></label><label className="field wide"><span>Professor responsável</span><select name="professorId" defaultValue={selected.professorPersonId || ""}>{professors.map((professor) => <option key={professor.professorId} value={professor.professorId}>{professor.displayName}</option>)}</select></label></div><button className="primary action" disabled={busy}>Salvar alterações</button></form>

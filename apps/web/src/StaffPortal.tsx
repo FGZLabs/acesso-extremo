@@ -8,12 +8,13 @@ import { MessagesPanel } from "./MessagesPanel";
 import { PeoplePanel } from "./PeoplePanel";
 import { decideBeltRequest, watchBeltRequests, watchStudentDirectory, type SessionProfile, type StudentDirectoryRow } from "./services";
 
-type StaffPage = "home" | "students" | "attendance" | "calendar" | "messages" | "belts" | "account";
+type StaffPage = "home" | "students" | "attendance" | "messages" | "belts" | "account";
 
 export function StaffPortal({ user, session }: { user: User; session: SessionProfile }) {
   const [page, setPage] = useState<StaffPage>("home");
   const [students, setStudents] = useState<StudentDirectoryRow[]>([]);
   const [selectedId, setSelectedId] = useState("");
+  const [attendanceView, setAttendanceView] = useState<"calendar" | "individual">("calendar");
   const [beltRequests, setBeltRequests] = useState<Array<Record<string, unknown>>>([]);
   const [message, setMessage] = useState("");
   const role = session.kind === "ADMIN" ? "ADMIN" : "PROFESSOR";
@@ -25,7 +26,7 @@ export function StaffPortal({ user, session }: { user: User; session: SessionPro
     return () => { stopStudents(); stopBelts(); };
   }, []);
 
-  const nav: Array<[StaffPage, string]> = [["home", "Visão geral"], ["students", "Alunos"], ["attendance", "Frequência"], ["calendar", "Calendário"], ["messages", "Mensagens"], ["belts", "Faixas"], ["account", "Minha conta"]];
+  const nav: Array<[StaffPage, string]> = [["home", "Visão geral"], ["students", "Alunos"], ["attendance", "Calendário e frequência"], ["messages", "Mensagens"], ["belts", "Faixas"], ["account", "Minha conta"]];
 
   async function decide(request: Record<string, unknown>, approved: boolean) {
     try {
@@ -41,8 +42,7 @@ export function StaffPortal({ user, session }: { user: User; session: SessionPro
         {message && <div className="form-message" role="status">{message}</div>}
         {page === "home" && <section className="page-stack"><div className="page-heading"><div><span className="eyebrow">VISÃO GERAL</span><h2>{role === "ADMIN" ? "Administração do sistema" : "Área do professor"}</h2><p>Acompanhamento dos alunos da Extremo Norte - Liberdade.</p></div></div><div className="dashboard-grid"><button className="dashboard-card" onClick={() => setPage("students")}><span>Alunos cadastrados</span><strong>{students.length}</strong><small>Abrir cadastros →</small></button><button className="dashboard-card" onClick={() => setPage("attendance")}><span>Frequência</span><strong>Hoje</strong><small>Acompanhar faltas →</small></button><button className="dashboard-card" onClick={() => setPage("belts")}><span>Faixas pendentes</span><strong>{beltRequests.length}</strong><small>Analisar solicitações →</small></button><button className="dashboard-card" onClick={() => setPage("students")}><span>Mensalidades</span><strong>{students.filter((student) => !student.validUntil || student.validUntil < new Date().toISOString().slice(0, 10)).length}</strong><small>Alunos em atraso →</small></button></div><div className="card portal-link-card"><div><h3>Link para cadastro do aluno</h3><p>Compartilhe este endereço no grupo para que o aluno faça o cadastro, aceite o termo e conclua o primeiro acesso.</p></div><code>{window.location.origin}/?portal=aluno</code></div></section>}
         {page === "students" && <PeoplePanel role={role} />}
-        {page === "attendance" && <section className="page-stack"><div className="page-heading"><div><span className="eyebrow">FREQUÊNCIA</span><h2>Acompanhamento individual</h2></div><label className="field student-picker"><span>Selecione o aluno</span><select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}><option value="">Selecione</option>{students.map((student) => <option key={student.personId} value={student.personId}>{student.fullName}</option>)}</select></label></div>{selected ? <AttendancePanel personId={selected.personId} birthDate={selected.birthDate} studentName={selected.fullName} canJustify={false} canEditAttendance /> : <div className="card empty-state"><strong>Selecione um aluno</strong><p>Faltas com justificativa mostram um ícone de texto. A justificativa não abona a falta.</p></div>}</section>}
-        {page === "calendar" && <AcademyCalendarPanel canManage />}
+        {page === "attendance" && <section className="page-stack"><div className="section-tabs" role="tablist"><button className={attendanceView === "calendar" ? "active" : ""} onClick={() => setAttendanceView("calendar")}>Calendário da academia</button><button className={attendanceView === "individual" ? "active" : ""} onClick={() => setAttendanceView("individual")}>Frequência dos alunos</button></div>{attendanceView === "calendar" ? <AcademyCalendarPanel canManage /> : <><div className="page-heading"><div><span className="eyebrow">FREQUÊNCIA</span><h2>Acompanhamento individual</h2></div><label className="field student-picker"><span>Selecione o aluno</span><select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}><option value="">Selecione</option>{students.map((student) => <option key={student.personId} value={student.personId}>{student.fullName}</option>)}</select></label></div>{selected ? <AttendancePanel personId={selected.personId} birthDate={selected.birthDate} studentName={selected.fullName} canJustify={false} canEditAttendance /> : <div className="card empty-state"><strong>Selecione um aluno</strong><p>Faltas com justificativa mostram um ícone de texto. A justificativa não abona a falta.</p></div>}</>}</section>}
         {page === "messages" && <MessagesPanel students={students} />}
         {page === "belts" && <section className="card module-page"><span className="eyebrow">APROVAÇÃO DO PROFESSOR</span><h2>Solicitações de faixa</h2><div className="request-list">{beltRequests.map((request) => { const student = students.find((item) => item.personId === request.personId); return <article key={String(request.id)}><div><strong>{student?.fullName || String(request.personId)}</strong><span>{String(request.currentBelt)} → {String(request.requestedBelt)}</span><p>{String(request.reason || "SEM JUSTIFICATIVA")}</p></div><div className="button-row"><button className="secondary" onClick={() => void decide(request, false)}>Rejeitar</button><button className="primary page-action" onClick={() => void decide(request, true)}>Aprovar</button></div></article>; })}{!beltRequests.length && <div className="empty-state"><strong>Nenhuma solicitação pendente</strong></div>}</div></section>}
         {page === "account" && <AccountPanel user={user} />}

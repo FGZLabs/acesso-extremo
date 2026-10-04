@@ -6,6 +6,7 @@ import {
   getIdTokenResult,
   reauthenticateWithCredential,
   sendPasswordResetEmail,
+  signInWithEmailAndPassword,
   updatePassword,
   type User,
 } from "firebase/auth";
@@ -94,6 +95,8 @@ export interface StudentDirectoryRow extends PersonRow {
   professorName: string;
   enrollmentStatus: string;
   validUntil?: string;
+  lastPaymentDate?: string;
+  lastPaymentAmount?: number;
   guardian?: {
     personId: string;
     fullName: string;
@@ -141,6 +144,16 @@ export interface StudentMessage {
   status: string;
   readAt?: unknown;
   sentAt?: { toDate?: () => Date };
+}
+
+export interface PaymentHistoryRow {
+  id: string;
+  amount: number;
+  method: string;
+  paymentDate: string;
+  referenceMonth: string;
+  validUntil: string;
+  notes?: string;
 }
 
 export interface StudentRegistrationInput {
@@ -258,15 +271,20 @@ export async function loadSessionProfile(user: User): Promise<SessionProfile> {
   if (user.email?.toLowerCase() === "teste@gmail.com") {
     return { kind: "PROFESSOR", displayName: "PROFESSOR TESTE" };
   }
-  const account = await getDoc(doc(db, "users", user.uid));
-  if (account.exists()) {
-    const data = account.data();
-    const roles = Array.isArray(data.roles) ? data.roles.map(String) : [];
-    return {
-      kind: roles.includes("PROFESSOR") ? "PROFESSOR" : "STUDENT",
-      personId: String(data.personId || user.uid),
-      displayName: String(data.displayName || user.displayName || user.email || "Aluno"),
-    };
+  // A autenticação é confirmada antes de a transação do cadastro terminar.
+  // Aguarda brevemente para que o primeiro acesso não seja classificado como desvinculado.
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const account = await getDoc(doc(db, "users", user.uid));
+    if (account.exists()) {
+      const data = account.data();
+      const roles = Array.isArray(data.roles) ? data.roles.map(String) : [];
+      return {
+        kind: roles.includes("PROFESSOR") ? "PROFESSOR" : "STUDENT",
+        personId: String(data.personId || user.uid),
+        displayName: String(data.displayName || user.displayName || user.email || "Aluno"),
+      };
+    }
+    if (attempt < 19) await new Promise((resolve) => window.setTimeout(resolve, 500));
   }
   return { kind: "UNLINKED", displayName: user.displayName || user.email || "Usuário" };
 }
@@ -303,7 +321,26 @@ export async function registerStudent(input: StudentRegistrationInput): Promise<
     throw new Error("O nome usado no aceite deve corresponder ao aluno adulto ou responsável legal.");
   }
 
-  const credential = await createUserWithEmailAndPassword(firebase.auth, input.email, input.password);
+  let credential;
+  let createdNewAccount = false;
+  try {
+    credential = await createUserWithEmailAndPassword(firebase.auth, input.email, input.password);
+    createdNewAccount = true;
+  } catch (error) {
+    const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
+    if (code !== "auth/email-already-in-use") throw error;
+    credential = await signInWithEmailAndPassword(firebase.auth, input.email, input.password);
+    const existingAccount = await getDoc(doc(firebase.db, "users", credential.user.uid));
+    if (existingAccount.exists()) {
+      const personId = String(existingAccount.data().personId || credential.user.uid);
+      const existingPerson = await getDoc(doc(firebase.db, "people", personId));
+      return {
+        personId,
+        accessPin: String(existingPerson.data()?.accessPin || ""),
+      };
+    }
+    // Recupera uma tentativa anterior que criou o login, mas não concluiu a ficha.
+  }
   const uid = credential.user.uid;
   try {
     const studentCpfRef = cpfDigits ? doc(firebase.db, "cpfIndex", await sha256(cpfDigits)) : null;
@@ -425,10 +462,10 @@ export async function registerStudent(input: StudentRegistrationInput): Promise<
       });
     });
   } catch (error) {
-    await deleteUser(credential.user).catch(() => undefined);
+    if (createdNewAccount) await deleteUser(credential.user).catch(() => undefined);
     throw error;
   }
-  if (input.photo) await uploadProfilePhoto(uid, input.photo);
+  if (input.photo) await uploadProfilePhoto(uid, input.photo).catch(() => undefined);
   return { personId: uid, accessPin, guardianPin };
 }
 
@@ -642,6 +679,8 @@ export function watchStudentDirectory(onData: (students: StudentDirectoryRow[]) 
           professorName: professorById.get(professorId)?.displayName || "NÃO DEFINIDO",
           enrollmentStatus: String(enrollment.status || "PENDENTE"),
           validUntil: enrollment.validUntil ? String(enrollment.validUntil) : undefined,
+          lastPaymentDate: enrollment.lastPaymentDate ? String(enrollment.lastPaymentDate) : undefined,
+          lastPaymentAmount: typeof enrollment.lastPaymentAmount === "number" ? enrollment.lastPaymentAmount : undefined,
           guardian: link ? {
             personId: String(link.guardianPersonId),
             fullName: String(guardianPerson?.fullName || snapshot.fullName || "RESPONSÁVEL"),
@@ -845,6 +884,7 @@ export async function createExternalReceipt(personId: string, amount: number, me
       notes: uppercaseText(notes),
       status: "CONFIRMADO",
       paymentDate,
+      referenceMonth: paymentDate.slice(0, 7),
       validUntil,
       createdBy: auth.currentUser!.uid,
       confirmedBy: auth.currentUser!.uid,
@@ -856,6 +896,7 @@ export async function createExternalReceipt(personId: string, amount: number, me
       status: "ATIVA",
       validUntil,
       lastPaymentDate: paymentDate,
+      lastPaymentAmount: amount,
       lastPaymentReceiptId: receiptRef.id,
       updatedAt: now,
     }, { merge: true });
@@ -914,5 +955,25 @@ export function watchStudentMessages(personId: string, onData: (items: StudentMe
   return onSnapshot(query(collection(db, "messages"), where("personId", "==", personId), limit(100)), (snapshot) => {
     const items = snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as StudentMessage));
     onData(items.sort((a, b) => (b.sentAt?.toDate?.().getTime() || 0) - (a.sentAt?.toDate?.().getTime() || 0)));
+  }, (error) => onError(error.message));
+}
+
+export function watchPaymentHistory(personId: string, onData: (items: PaymentHistoryRow[]) => void, onError: (message: string) => void): Unsubscribe {
+  const { db } = requireFirebase();
+  return onSnapshot(query(collection(db, "externalReceipts"), where("personId", "==", personId), limit(100)), (snapshot) => {
+    const items = snapshot.docs.map((item) => {
+      const data = item.data();
+      const paymentDate = String(data.paymentDate || "");
+      return {
+        id: item.id,
+        amount: Number(data.amount || 0),
+        method: String(data.method || "NÃO INFORMADA"),
+        paymentDate,
+        referenceMonth: String(data.referenceMonth || paymentDate.slice(0, 7)),
+        validUntil: String(data.validUntil || ""),
+        notes: data.notes ? String(data.notes) : undefined,
+      } satisfies PaymentHistoryRow;
+    }).sort((a, b) => b.paymentDate.localeCompare(a.paymentDate));
+    onData(items);
   }, (error) => onError(error.message));
 }

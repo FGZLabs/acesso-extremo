@@ -111,7 +111,7 @@ export function PersonForm({ enabled, onCreated }: { enabled: boolean; onCreated
         </label>
         {birthDate && (
           <>
-            <label className="field wide"><span>Foto de perfil (opcional)</span><input name="photo" type="file" accept="image/*" capture="user" /><small>Imagem de até 5 MB.</small></label>
+            <label className="field wide"><span>Foto de perfil (opcional)</span><input name="photo" type="file" accept="image/*" /><small>Tire uma foto ou escolha da galeria. Máximo de 5 MB.</small></label>
             <label className="field wide required">
               <span>Nome completo</span>
               <input className="uppercase-input" name="fullName" required autoComplete="name" onInput={uppercaseInput} />
