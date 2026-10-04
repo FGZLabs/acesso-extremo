@@ -240,6 +240,26 @@ th { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spa
 .modal-explanation { margin: -4px 0 16px; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .justification-text { padding: 16px; border-radius: 10px; background: #f6f8fb; line-height: 1.6; }
 .student-picker { min-width: 280px; }
+.monthly-calendar-card { padding: 24px; overflow: hidden; }
+.calendar-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 20px; }
+.calendar-heading h2 { margin: 5px 0 0; text-transform: capitalize; }
+.calendar-navigation { display: flex; gap: 7px; }
+.monthly-calendar-weekdays, .monthly-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(38px, 1fr)); gap: 7px; }
+.monthly-calendar-weekdays { margin-bottom: 7px; }
+.monthly-calendar-weekdays span { text-align: center; color: var(--muted); font-size: 9px; font-weight: 850; }
+.monthly-calendar-day, .monthly-calendar-empty { min-height: 98px; border-radius: 12px; }
+.monthly-calendar-day { border: 1px solid var(--line); padding: 10px; display: grid; align-content: start; gap: 7px; background: #f8fafc; }
+.monthly-calendar-day > strong { font-size: 18px; }
+.monthly-calendar-day > span { font-size: 8px; font-weight: 900; color: var(--muted); }
+.monthly-calendar-day > small { font-size: 9px; line-height: 1.3; overflow-wrap: anywhere; }
+.monthly-calendar-day.calendar-routine { background: #ecfdf3; border-color: #b7e7c6; color: #137333; }
+.monthly-calendar-day.calendar-canceled, .monthly-calendar-day.calendar-holiday { background: #fff1f1; border-color: #f5c2c2; color: #b42318; }
+.monthly-calendar-day.calendar-extra { background: #eef4ff; border-color: #cbdaf8; color: #2557ad; }
+.monthly-calendar-day.calendar-today { box-shadow: inset 0 0 0 2px #244d99; }
+.calendar-legend { display: flex; flex-wrap: wrap; gap: 15px; margin-top: 16px; color: var(--muted); font-size: 10px; }
+.calendar-legend span { display: flex; align-items: center; gap: 6px; }
+.calendar-mark { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+.calendar-mark.routine { background: #22a447; }.calendar-mark.canceled { background: #df3e3e; }.calendar-mark.extra { background: #3d77dc; }
 .calendar-layout { display: grid; grid-template-columns: minmax(280px, .75fr) minmax(420px, 1.25fr); gap: 18px; align-items: start; }
 .calendar-form, .calendar-list { padding: 24px; }
 .calendar-form h2, .calendar-list h2 { margin: 5px 0 8px; }
@@ -294,5 +314,13 @@ th { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spa
   .student-hero .status-pill { margin-left: 82px; }
   .modal-backdrop { padding: 8px; }.modal-card { max-height: calc(100vh - 16px); padding: 17px; }
   .attendance-calendar { grid-template-columns: repeat(3, minmax(60px,1fr)); }
+  .monthly-calendar-card { padding: 15px; }
+  .calendar-heading { align-items: stretch; flex-direction: column; }
+  .monthly-calendar-weekdays, .monthly-calendar-grid { gap: 3px; grid-template-columns: repeat(7, minmax(32px, 1fr)); }
+  .monthly-calendar-day, .monthly-calendar-empty { min-height: 68px; border-radius: 8px; }
+  .monthly-calendar-day { padding: 5px; gap: 3px; }
+  .monthly-calendar-day > strong { font-size: 14px; }
+  .monthly-calendar-day > span { font-size: 6px; }
+  .monthly-calendar-day > small { display: none; }
   .request-list article { align-items: stretch; flex-direction: column; }
 }
