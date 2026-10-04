@@ -10,8 +10,8 @@ export function TermsModal({ signerName, minor, onCancel, onAccept }: {
 }) {
   const [signature, setSignature] = useState("");
   const [confirmed, setConfirmed] = useState(false);
-  const normalizedSignature = signature.trim().toLocaleUpperCase("pt-BR");
-  const canAccept = confirmed && normalizedSignature === signerName.trim().toLocaleUpperCase("pt-BR");
+  const normalizedSignature = signature.trim().toLocaleLowerCase("pt-BR");
+  const canAccept = confirmed && normalizedSignature === signerName.trim().toLocaleLowerCase("pt-BR");
 
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="terms-title">
@@ -40,8 +40,8 @@ export function TermsModal({ signerName, minor, onCancel, onAccept }: {
         </div>
         <div className="terms-acceptance">
           <label className="check-row"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span>Li e aceito o termo de responsabilidade e o tratamento de dados descrito acima.</span></label>
-          <label className="field required"><span>{minor ? "Nome completo do responsável legal" : "Nome completo do aluno"}</span><input className="uppercase-input" value={signature} onChange={(event) => setSignature(event.target.value.toLocaleUpperCase("pt-BR"))} placeholder={signerName} /></label>
-          <div className="button-row"><button className="secondary" onClick={onCancel}>Voltar</button><button className="primary page-action" disabled={!canAccept} onClick={() => onAccept(normalizedSignature)}>Aceitar e concluir cadastro</button></div>
+          <label className="field required"><span>{minor ? "Nome completo do responsável legal" : "Nome completo do aluno"}</span><input value={signature} autoComplete="name" autoCapitalize="words" spellCheck onChange={(event) => setSignature(event.target.value)} placeholder={signerName} /></label>
+          <div className="button-row"><button className="secondary" onClick={onCancel}>Voltar</button><button className="primary page-action" disabled={!canAccept} onClick={() => onAccept(signature.trim())}>Aceitar e concluir cadastro</button></div>
         </div>
       </section>
     </div>

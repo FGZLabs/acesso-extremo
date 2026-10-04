@@ -192,8 +192,12 @@ function todayLocal(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
-function uppercaseText(value: string): string {
-  return value.trim().toLocaleUpperCase("pt-BR");
+function cleanText(value: string): string {
+  return value.trim();
+}
+
+function comparableText(value: string): string {
+  return cleanText(value).toLocaleLowerCase("pt-BR");
 }
 
 function generateAccessPin(): string {
@@ -255,6 +259,9 @@ export function friendlyAuthError(error: unknown): string {
     "auth/too-many-requests": "Muitas tentativas. Aguarde alguns minutos e tente novamente.",
     "auth/requires-recent-login": "Por segurança, saia e entre novamente antes de trocar a senha.",
     "auth/network-request-failed": "Não foi possível acessar o Firebase. Verifique sua conexão.",
+    "permission-denied": "O cadastro não pôde ser gravado por uma regra de segurança. Atualize a página e tente novamente.",
+    "unavailable": "O serviço está temporariamente indisponível. Verifique sua internet e tente novamente.",
+    "failed-precondition": "Não foi possível concluir o cadastro com esses dados. Revise as informações e tente novamente.",
   };
   return messages[code] ?? (error instanceof Error ? error.message : "Não foi possível concluir a operação.");
 }
@@ -317,7 +324,7 @@ export async function registerStudent(input: StudentRegistrationInput): Promise<
   if (input.guardian && !isValidCpf(guardianCpf)) throw new Error("CPF do responsável inválido.");
   if (input.guardian && !isValidMobilePhone(input.guardian.phone)) throw new Error("Telefone do responsável inválido.");
   if (cpfDigits && guardianCpf && guardianCpf === cpfDigits) throw new Error("Aluno e responsável não podem usar o mesmo CPF.");
-  if (uppercaseText(input.acceptance.signedByName) !== uppercaseText(minor ? input.guardian?.fullName || "" : input.fullName)) {
+  if (comparableText(input.acceptance.signedByName) !== comparableText(minor ? input.guardian?.fullName || "" : input.fullName)) {
     throw new Error("O nome usado no aceite deve corresponder ao aluno adulto ou responsável legal.");
   }
 
@@ -360,7 +367,7 @@ export async function registerStudent(input: StudentRegistrationInput): Promise<
       transaction.set(doc(firebase.db, "users", uid), {
         uid,
         personId: uid,
-        displayName: uppercaseText(input.fullName),
+        displayName: cleanText(input.fullName),
         roles: ["ALUNO"],
         onboardingStatus: "CONCLUIDO",
         createdAt: now,
@@ -368,13 +375,13 @@ export async function registerStudent(input: StudentRegistrationInput): Promise<
       });
       transaction.set(doc(firebase.db, "people", uid), {
         personId: uid,
-        fullName: uppercaseText(input.fullName),
+        fullName: cleanText(input.fullName),
         birthDate: input.birthDate,
         cpfDigits: cpfDigits || null,
         cpfFormatted: cpfDigits ? formatCpf(cpfDigits) : null,
         phone: formatPhone(input.phone),
         whatsapp: formatPhone(input.whatsapp),
-        address: uppercaseText(input.address),
+        address: cleanText(input.address),
         email: credential.user.email || input.email.trim().toLowerCase(),
         roles: ["ALUNO"],
         status: "ATIVA",
@@ -411,13 +418,13 @@ export async function registerStudent(input: StudentRegistrationInput): Promise<
         if (!guardianIndex?.exists() && generatedGuardianRef) {
           transaction.set(generatedGuardianRef, {
             personId: generatedGuardianRef.id,
-            fullName: uppercaseText(input.guardian.fullName),
+            fullName: cleanText(input.guardian.fullName),
             birthDate: null,
             cpfDigits: guardianCpf,
             cpfFormatted: formatCpf(guardianCpf),
             phone: formatPhone(input.guardian.phone),
             whatsapp: null,
-            address: uppercaseText(input.guardian.address),
+            address: cleanText(input.guardian.address),
             email: null,
             roles: ["RESPONSAVEL"],
             status: "ATIVA",
@@ -433,15 +440,15 @@ export async function registerStudent(input: StudentRegistrationInput): Promise<
         transaction.set(doc(firebase.db, "guardianLinks", `${guardianPersonId}_${uid}`), {
           guardianPersonId,
           dependentPersonId: uid,
-          relationship: uppercaseText(input.guardian.relationship),
+          relationship: cleanText(input.guardian.relationship),
           status: "ATIVO",
           historicallyLinked: true,
           createdBy: uid,
           guardianSnapshot: {
-            fullName: uppercaseText(input.guardian.fullName),
+            fullName: cleanText(input.guardian.fullName),
             cpfFormatted: formatCpf(guardianCpf),
             phone: formatPhone(input.guardian.phone),
-            address: uppercaseText(input.guardian.address),
+            address: cleanText(input.guardian.address),
             accessPin: guardianPin,
           },
           createdAt: now,
@@ -453,7 +460,7 @@ export async function registerStudent(input: StudentRegistrationInput): Promise<
         guardianPersonId: minor ? guardianPersonId : null,
         actorUid: uid,
         termVersion: input.acceptance.termVersion,
-        signedByName: uppercaseText(input.acceptance.signedByName),
+        signedByName: cleanText(input.acceptance.signedByName),
         acceptedByRole: input.acceptance.acceptedByRole,
         accepted: true,
         acceptedAt: now,
@@ -515,12 +522,12 @@ export async function createStudent(payload: CreateStudentPayload): Promise<{ pe
     const now = serverTimestamp();
     transaction.set(personRef, {
       personId: personRef.id,
-      fullName: uppercaseText(payload.person.fullName),
+      fullName: cleanText(payload.person.fullName),
       birthDate: payload.person.birthDate,
       ...(studentCpf ? { cpfDigits: studentCpf, cpfFormatted: formatCpf(studentCpf) } : {}),
       phone: phone ? formatPhone(phone) : null,
       whatsapp: whatsapp ? formatPhone(whatsapp) : null,
-      address: payload.person.address ? uppercaseText(payload.person.address) : null,
+      address: payload.person.address ? cleanText(payload.person.address) : null,
       email: payload.person.email?.trim().toLowerCase() || null,
       roles: ["ALUNO"],
       status: "ATIVA",
@@ -538,7 +545,7 @@ export async function createStudent(payload: CreateStudentPayload): Promise<{ pe
       lastGraduationDate: payload.student.lastGraduationDate || null,
       professorPersonId: payload.student.professorPersonId || null,
       planId: payload.student.planId || null,
-      notes: payload.student.notes ? uppercaseText(payload.student.notes) : null,
+      notes: payload.student.notes ? cleanText(payload.student.notes) : null,
       facialStatus: "PENDENTE",
       profilePhotoPath: null,
       administrativeRestriction: null,
@@ -558,13 +565,13 @@ export async function createStudent(payload: CreateStudentPayload): Promise<{ pe
     let relationship: string | null = null;
     if (payload.guardian && resolvedGuardianRef && guardianCpfRef) {
       guardianPersonId = resolvedGuardianRef.id;
-      relationship = uppercaseText(payload.guardian.relationship);
+      relationship = cleanText(payload.guardian.relationship);
       if (existingGuardianFound) {
         transaction.update(resolvedGuardianRef, { roles: arrayUnion("RESPONSAVEL"), accessPin: guardianPin, updatedAt: now });
       } else {
         transaction.set(resolvedGuardianRef, {
         personId: resolvedGuardianRef.id,
-        fullName: uppercaseText(payload.guardian.fullName),
+        fullName: cleanText(payload.guardian.fullName),
         birthDate: null,
         cpfDigits: guardianCpf,
         cpfFormatted: formatCpf(guardianCpf),
@@ -589,7 +596,7 @@ export async function createStudent(payload: CreateStudentPayload): Promise<{ pe
         relationship,
         status: "ATIVO",
         historicallyLinked: true,
-        guardianSnapshot: { fullName: uppercaseText(payload.guardian!.fullName), cpfFormatted: formatCpf(guardianCpf), accessPin: guardianPin },
+        guardianSnapshot: { fullName: cleanText(payload.guardian!.fullName), cpfFormatted: formatCpf(guardianCpf), accessPin: guardianPin },
         createdAt: now,
       });
     }
@@ -600,7 +607,7 @@ export async function createStudent(payload: CreateStudentPayload): Promise<{ pe
       entityType: "people",
       entityId: personRef.id,
       occurredAt: now,
-      after: { fullName: uppercaseText(payload.person.fullName), roles: ["ALUNO"], minor },
+      after: { fullName: cleanText(payload.person.fullName), roles: ["ALUNO"], minor },
     });
   });
 
@@ -710,10 +717,10 @@ export async function updateOwnProfile(personId: string, input: { fullName: stri
   const { db } = requireFirebase();
   if (!isValidMobilePhone(input.phone) || !isValidMobilePhone(input.whatsapp)) throw new Error("Informe telefone e WhatsApp completos.");
   await updateDoc(doc(db, "people", personId), {
-    fullName: uppercaseText(input.fullName),
+    fullName: cleanText(input.fullName),
     phone: formatPhone(input.phone),
     whatsapp: formatPhone(input.whatsapp),
-    address: uppercaseText(input.address),
+    address: cleanText(input.address),
     updatedAt: serverTimestamp(),
   });
 }
@@ -727,7 +734,7 @@ export async function requestBeltChange(personId: string, currentBelt: string, r
     personId,
     currentBelt,
     requestedBelt,
-    reason: uppercaseText(reason),
+    reason: cleanText(reason),
     status: "PENDENTE",
     requestedBy: auth.currentUser.uid,
     requestedAt: serverTimestamp(),
@@ -760,7 +767,7 @@ export async function saveAbsenceJustification(personId: string, date: string, t
   await setDoc(doc(db, "absenceJustifications", `${personId}_${date}`), {
     personId,
     date,
-    text: uppercaseText(text),
+    text: cleanText(text),
     authorUid: auth.currentUser.uid,
     updatedAt: serverTimestamp(),
   }, { merge: true });
@@ -799,8 +806,8 @@ export async function saveAcademyDay(input: { date: string; kind: AcademyDayKind
     eventId: input.date,
     date: input.date,
     kind: input.kind,
-    title: uppercaseText(input.title),
-    details: uppercaseText(input.details || "") || null,
+    title: cleanText(input.title),
+    details: cleanText(input.details || "") || null,
     closed: input.kind === "HOLIDAY" || input.kind === "CANCELED",
     holiday: input.kind === "HOLIDAY",
     optionalEvent: input.kind === "EXTRA",
@@ -839,10 +846,10 @@ export async function staffUpdateStudent(personId: string, input: { fullName: st
   const { db } = requireFirebase();
   await Promise.all([
     updateDoc(doc(db, "people", personId), {
-      fullName: uppercaseText(input.fullName),
+      fullName: cleanText(input.fullName),
       phone: input.phone ? formatPhone(input.phone) : null,
       whatsapp: input.whatsapp ? formatPhone(input.whatsapp) : null,
-      address: uppercaseText(input.address),
+      address: cleanText(input.address),
       updatedAt: serverTimestamp(),
     }),
     updateDoc(doc(db, "studentProfiles", personId), { professorPersonId: input.professorPersonId, updatedAt: serverTimestamp() }),
@@ -880,8 +887,8 @@ export async function createExternalReceipt(personId: string, amount: number, me
       receiptId: receiptRef.id,
       personId,
       amount,
-      method: uppercaseText(method),
-      notes: uppercaseText(notes),
+      method: cleanText(method),
+      notes: cleanText(notes),
       status: "CONFIRMADO",
       paymentDate,
       referenceMonth: paymentDate.slice(0, 7),
@@ -908,7 +915,7 @@ export async function createStudentNote(personId: string, text: string): Promise
   const { auth, db } = requireFirebase();
   if (!auth.currentUser) throw new Error("Sessão expirada.");
   const noteRef = doc(collection(db, "studentNotes"));
-  await setDoc(noteRef, { noteId: noteRef.id, personId, text: uppercaseText(text), createdBy: auth.currentUser.uid, createdAt: serverTimestamp() });
+  await setDoc(noteRef, { noteId: noteRef.id, personId, text: cleanText(text), createdBy: auth.currentUser.uid, createdAt: serverTimestamp() });
 }
 
 export async function sendInAppMessage(personId: string, text: string, title = "COMUNICADO"): Promise<void> {
@@ -918,8 +925,8 @@ export async function sendInAppMessage(personId: string, text: string, title = "
   await setDoc(messageRef, {
     messageId: messageRef.id,
     personId,
-    title: uppercaseText(title),
-    text: uppercaseText(text),
+    title: cleanText(title),
+    text: cleanText(text),
     channel: "IN_APP",
     status: "ENVIADA",
     sentBy: auth.currentUser.uid,
@@ -936,7 +943,7 @@ export async function sendBulkInAppMessage(personIds: string[], title: string, t
   const batch = writeBatch(db);
   uniqueIds.forEach((personId) => {
     const messageRef = doc(collection(db, "messages"));
-    batch.set(messageRef, { messageId: messageRef.id, personId, title: uppercaseText(title || "COMUNICADO"), text: uppercaseText(text), channel: "IN_APP", status: "ENVIADA", sentBy: auth.currentUser!.uid, sentAt: serverTimestamp() });
+    batch.set(messageRef, { messageId: messageRef.id, personId, title: cleanText(title || "COMUNICADO"), text: cleanText(text), channel: "IN_APP", status: "ENVIADA", sentBy: auth.currentUser!.uid, sentAt: serverTimestamp() });
   });
   await batch.commit();
 }

@@ -4,10 +4,6 @@ import { createStudent, watchProfessors, type CreateStudentPayload, type Profess
 
 const belts = ["Branca", "Cinza", "Amarela", "Laranja", "Verde", "Azul", "Roxa", "Marrom", "Preta"];
 
-function uppercaseInput(event: FormEvent<HTMLInputElement | HTMLTextAreaElement>) {
-  event.currentTarget.value = event.currentTarget.value.toLocaleUpperCase("pt-BR");
-}
-
 function openDatePicker(event: MouseEvent<HTMLInputElement>) {
   event.currentTarget.showPicker?.();
 }
@@ -51,11 +47,11 @@ export function PersonForm({ enabled, onCreated }: { enabled: boolean; onCreated
       ...(form.get("photo") instanceof File && (form.get("photo") as File).size > 0 ? { photo: form.get("photo") as File } : {}),
       person: {
         birthDate,
-        fullName: String(form.get("fullName") ?? "").trim().toLocaleUpperCase("pt-BR"),
+        fullName: String(form.get("fullName") ?? "").trim(),
         ...(cpf ? { cpf } : {}),
         phone: String(form.get("phone") ?? ""),
         whatsapp: String(form.get("whatsapp") ?? ""),
-        address: String(form.get("address") ?? "").trim().toLocaleUpperCase("pt-BR"),
+        address: String(form.get("address") ?? "").trim(),
         email: String(form.get("email") ?? ""),
       },
       student: {
@@ -63,15 +59,15 @@ export function PersonForm({ enabled, onCreated }: { enabled: boolean; onCreated
         lastGraduationDate: String(form.get("lastGraduationDate") ?? "") || undefined,
         professorPersonId: String(form.get("professorPersonId") ?? "") || undefined,
         planId: String(form.get("planId") ?? "") || undefined,
-        notes: String(form.get("notes") ?? "").trim().toLocaleUpperCase("pt-BR") || undefined,
+        notes: String(form.get("notes") ?? "").trim() || undefined,
       },
     };
 
     if (minor) {
       payload.guardian = {
-        fullName: String(form.get("guardianName") ?? "").trim().toLocaleUpperCase("pt-BR"),
+        fullName: String(form.get("guardianName") ?? "").trim(),
         cpf: guardianCpf,
-        relationship: String(form.get("relationship") ?? "").trim().toLocaleUpperCase("pt-BR"),
+        relationship: String(form.get("relationship") ?? "").trim(),
       };
     }
 
@@ -94,7 +90,7 @@ export function PersonForm({ enabled, onCreated }: { enabled: boolean; onCreated
   }
 
   return (
-    <form className="card person-form" onSubmit={submit}>
+    <form className="card person-form" autoComplete="on" onSubmit={submit}>
       <div className="section-title">
         <div>
           <span className="eyebrow">ENTIDADE CENTRAL</span>
@@ -114,7 +110,7 @@ export function PersonForm({ enabled, onCreated }: { enabled: boolean; onCreated
             <label className="field wide"><span>Foto de perfil (opcional)</span><input name="photo" type="file" accept="image/*" /><small>Tire uma foto ou escolha da galeria. Máximo de 5 MB.</small></label>
             <label className="field wide required">
               <span>Nome completo</span>
-              <input className="uppercase-input" name="fullName" required autoComplete="name" onInput={uppercaseInput} />
+              <input name="fullName" required autoComplete="name" autoCapitalize="words" spellCheck />
             </label>
             <label className={`field ${minor ? "" : "required"}`}>
               <span>CPF {minor && "(opcional para menor)"}</span>
@@ -127,10 +123,10 @@ export function PersonForm({ enabled, onCreated }: { enabled: boolean; onCreated
                 placeholder="000.000.000-00"
               />
             </label>
-            <label className="field"><span>Telefone para ligação via operadora</span><input name="phone" type="tel" inputMode="numeric" placeholder="(00) 00000-0000" value={phone} onChange={(event) => setPhone(formatPhone(event.target.value))} /></label>
-            <label className="field"><span>WhatsApp</span><input name="whatsapp" type="tel" inputMode="numeric" placeholder="(00) 00000-0000" value={whatsapp} onChange={(event) => setWhatsapp(formatPhone(event.target.value))} /></label>
-            <label className="field"><span>E-mail</span><input name="email" type="email" /></label>
-            <label className="field wide"><span>Endereço</span><input className="uppercase-input" name="address" onInput={uppercaseInput} /></label>
+            <label className="field"><span>Telefone para ligação via operadora</span><input name="phone" type="tel" inputMode="numeric" autoComplete="tel" placeholder="(00) 00000-0000" value={phone} onChange={(event) => setPhone(formatPhone(event.target.value))} /></label>
+            <label className="field"><span>WhatsApp</span><input name="whatsapp" type="tel" inputMode="numeric" autoComplete="tel" placeholder="(00) 00000-0000" value={whatsapp} onChange={(event) => setWhatsapp(formatPhone(event.target.value))} /></label>
+            <label className="field"><span>E-mail</span><input name="email" type="email" autoComplete="email" /></label>
+            <label className="field wide"><span>Endereço</span><input name="address" autoComplete="street-address" autoCapitalize="words" spellCheck /></label>
             <label className="field required">
               <span>Graduação atual</span>
               <select name="currentBelt" required>{belts.map((belt) => <option key={belt}>{belt}</option>)}</select>
@@ -138,7 +134,7 @@ export function PersonForm({ enabled, onCreated }: { enabled: boolean; onCreated
             <label className="field"><span>Última graduação</span><input className="date-input" name="lastGraduationDate" type="date" onClick={openDatePicker} /></label>
             <label className="field"><span>Professor responsável</span><select name="professorPersonId" defaultValue=""><option value="">Selecione</option>{professors.map((professor) => <option key={professor.professorId} value={professor.professorId}>{professor.displayName}</option>)}</select></label>
             <label className="field"><span>ID do plano</span><input name="planId" /></label>
-            <label className="field wide"><span>Observações</span><textarea className="uppercase-input" name="notes" rows={3} onInput={uppercaseInput} /></label>
+            <label className="field wide"><span>Observações</span><textarea name="notes" rows={3} autoCapitalize="sentences" spellCheck /></label>
           </>
         )}
       </div>
@@ -148,9 +144,9 @@ export function PersonForm({ enabled, onCreated }: { enabled: boolean; onCreated
           <legend>Responsável obrigatório</legend>
           <p className="guardian-help">Informe os dados abaixo. O CPF será verificado automaticamente: se o responsável já existir, o vínculo será reutilizado; caso contrário, um novo personId será criado.</p>
           <div className="form-grid">
-            <label className="field wide required"><span>Nome do responsável</span><input className="uppercase-input" name="guardianName" required onInput={uppercaseInput} /></label>
+            <label className="field wide required"><span>Nome do responsável</span><input name="guardianName" required autoComplete="name" autoCapitalize="words" spellCheck /></label>
             <label className="field required"><span>CPF do responsável</span><input name="guardianCpf" inputMode="numeric" placeholder="000.000.000-00" required value={guardianCpf} onChange={(event) => setGuardianCpf(formatCpf(event.target.value))} /></label>
-            <label className="field required"><span>Parentesco</span><input className="uppercase-input" name="relationship" required placeholder="EX.: MÃE, PAI, AVÓ" onInput={uppercaseInput} /></label>
+            <label className="field required"><span>Parentesco</span><input name="relationship" required autoCapitalize="words" spellCheck placeholder="Ex.: mãe, pai, avó" /></label>
           </div>
         </fieldset>
       )}

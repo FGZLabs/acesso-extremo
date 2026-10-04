@@ -73,8 +73,14 @@ export default function App() {
     });
   }, []);
 
+  async function exitOnboarding() {
+    if (auth?.currentUser) await signOut(auth).catch(() => undefined);
+    setOnboarding(false);
+  }
+
+  if (onboarding) return <StudentOnboarding onBack={() => void exitOnboarding()} />;
   if (!authReady || (user && !session && !sessionError)) return <div className="loading">Carregando ambiente seguro…</div>;
-  if (!firebaseConfigured || !user) return onboarding ? <StudentOnboarding onBack={() => setOnboarding(false)} /> : <Login onRegister={() => setOnboarding(true)} />;
+  if (!firebaseConfigured || !user) return <Login onRegister={() => setOnboarding(true)} />;
   if (sessionError) return <div className="empty-state card"><h2>Não foi possível carregar a conta</h2><p>{sessionError}</p><button className="secondary" onClick={() => auth && void signOut(auth)}>Sair</button></div>;
   if (!session) return null;
   if (session.kind === "ADMIN" || session.kind === "PROFESSOR") return <StaffPortal user={user} session={session} />;

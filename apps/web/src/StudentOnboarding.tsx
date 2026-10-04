@@ -1,5 +1,7 @@
 import { ageOn, formatCpf, formatPhone } from "@academia/domain";
+import { signOut } from "firebase/auth";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { auth } from "./firebase";
 import { friendlyAuthError, registerStudent, watchProfessors, type ProfessorOption, type StudentRegistrationInput } from "./services";
 import { TERM_VERSION, TermsModal } from "./TermsModal";
 
@@ -10,8 +12,8 @@ function todayLocal(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
-function upper(value: FormDataEntryValue | null): string {
-  return String(value || "").trim().toLocaleUpperCase("pt-BR");
+function clean(value: FormDataEntryValue | null): string {
+  return String(value || "").trim();
 }
 
 export function StudentOnboarding({ onBack }: { onBack: () => void }) {
@@ -26,6 +28,7 @@ export function StudentOnboarding({ onBack }: { onBack: () => void }) {
   const [pending, setPending] = useState<Omit<StudentRegistrationInput, "acceptance"> | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [completed, setCompleted] = useState<{ accessPin: string; guardianPin?: string } | null>(null);
   const age = useMemo(() => {
     try { return birthDate ? ageOn(birthDate, todayLocal()) : null; } catch { return null; }
   }, [birthDate]);
@@ -39,23 +42,23 @@ export function StudentOnboarding({ onBack }: { onBack: () => void }) {
     const password = String(data.get("password") || "");
     if (password !== String(data.get("confirmation") || "")) return setMessage("As senhas não conferem.");
     const registration: Omit<StudentRegistrationInput, "acceptance"> = {
-      fullName: upper(data.get("fullName")),
+      fullName: clean(data.get("fullName")),
       birthDate,
       cpf,
       phone,
       whatsapp,
-      address: upper(data.get("address")),
+      address: clean(data.get("address")),
       email: String(data.get("email") || "").trim().toLowerCase(),
       password,
       ...(photo ? { photo } : {}),
       currentBelt: String(data.get("currentBelt") || "Branca"),
       professorId: String(data.get("professorId") || ""),
       ...(minor ? { guardian: {
-        fullName: upper(data.get("guardianName")),
+        fullName: clean(data.get("guardianName")),
         cpf: guardianCpf,
         phone: guardianPhone,
-        address: upper(data.get("guardianAddress")),
-        relationship: upper(data.get("relationship")),
+        address: clean(data.get("guardianAddress")),
+        relationship: clean(data.get("relationship")),
       } } : {}),
     };
     setMessage("");
@@ -67,11 +70,13 @@ export function StudentOnboarding({ onBack }: { onBack: () => void }) {
     setBusy(true);
     setMessage("");
     try {
-      await registerStudent({
+      const result = await registerStudent({
         ...pending,
         acceptance: { signedByName, acceptedByRole: minor ? "GUARDIAN" : "STUDENT", termVersion: TERM_VERSION },
       });
       setPending(null);
+      if (auth) await signOut(auth).catch(() => undefined);
+      setCompleted(result);
     } catch (error) {
       setPending(null);
       setMessage(friendlyAuthError(error));
@@ -84,28 +89,28 @@ export function StudentOnboarding({ onBack }: { onBack: () => void }) {
     <div className="onboarding-shell">
       <header className="onboarding-header"><button className="text-button" onClick={onBack}>← Voltar para o login</button><span>Cadastro do aluno</span></header>
       <main className="onboarding-main">
-        <form className="card onboarding-form" onSubmit={review}>
+        <form className="card onboarding-form" autoComplete="on" onSubmit={review}>
           <div className="section-title"><div><span className="eyebrow">PRIMEIRO ACESSO</span><h1>Faça seu cadastro</h1><p>Preencha seus dados. A leitura facial será cadastrada presencialmente no equipamento quando o serviço estiver configurado.</p></div>{age !== null && <span className="age-chip">{age} anos</span>}</div>
           <div className="form-section"><h3>Dados pessoais</h3><div className="form-grid">
             <label className="field required first-field"><span>Data de nascimento</span><input className="date-input" type="date" value={birthDate} required onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => setBirthDate(event.target.value)} /></label>
             {birthDate && <>
               <label className="field wide"><span>Foto de perfil (opcional)</span><input type="file" accept="image/*" onChange={(event) => setPhoto(event.target.files?.[0] || null)} /><small>Tire uma foto ou escolha da galeria. Máximo de 5 MB.</small></label>
-              <label className="field wide required"><span>Nome completo</span><input className="uppercase-input" name="fullName" minLength={3} required /></label>
+              <label className="field wide required"><span>Nome completo</span><input name="fullName" minLength={3} autoComplete="name" autoCapitalize="words" spellCheck required /></label>
               <label className={`field ${minor ? "" : "required"}`}><span>CPF {minor && "(opcional para menor)"}</span><input inputMode="numeric" value={cpf} required={!minor} placeholder="000.000.000-00" onChange={(event) => setCpf(formatCpf(event.target.value))} /></label>
-              <label className="field required"><span>Telefone para ligação via operadora</span><input type="tel" inputMode="numeric" value={phone} required placeholder="(00) 00000-0000" onChange={(event) => setPhone(formatPhone(event.target.value))} /></label>
-              <label className="field required"><span>WhatsApp</span><input type="tel" inputMode="numeric" value={whatsapp} required placeholder="(00) 00000-0000" onChange={(event) => setWhatsapp(formatPhone(event.target.value))} /></label>
-              <label className="field wide required"><span>Endereço completo</span><input className="uppercase-input" name="address" required /></label>
+              <label className="field required"><span>Telefone para ligação via operadora</span><input type="tel" inputMode="numeric" autoComplete="tel" value={phone} required placeholder="(00) 00000-0000" onChange={(event) => setPhone(formatPhone(event.target.value))} /></label>
+              <label className="field required"><span>WhatsApp</span><input type="tel" inputMode="numeric" autoComplete="tel" value={whatsapp} required placeholder="(00) 00000-0000" onChange={(event) => setWhatsapp(formatPhone(event.target.value))} /></label>
+              <label className="field wide required"><span>Endereço completo</span><input name="address" autoComplete="street-address" autoCapitalize="words" spellCheck required /></label>
               <label className="field required"><span>Faixa atual</span><select name="currentBelt" required>{belts.map((belt) => <option key={belt}>{belt}</option>)}</select></label>
               <label className="field required"><span>Professor responsável</span><select name="professorId" required defaultValue=""><option value="" disabled>Selecione</option>{professors.map((professor) => <option key={professor.professorId} value={professor.professorId}>{professor.displayName}</option>)}</select></label>
             </>}
           </div></div>
 
           {minor && <fieldset className="guardian-box"><legend>Responsável legal</legend><p className="guardian-help">O cadastro do menor somente poderá ser concluído após o preenchimento destes dados e o aceite do termo pelo responsável.</p><div className="form-grid">
-            <label className="field wide required"><span>Nome completo do responsável</span><input className="uppercase-input" name="guardianName" required /></label>
+            <label className="field wide required"><span>Nome completo do responsável</span><input name="guardianName" autoComplete="name" autoCapitalize="words" spellCheck required /></label>
             <label className="field required"><span>CPF do responsável</span><input inputMode="numeric" value={guardianCpf} required placeholder="000.000.000-00" onChange={(event) => setGuardianCpf(formatCpf(event.target.value))} /></label>
-            <label className="field required"><span>Telefone do responsável</span><input type="tel" inputMode="numeric" value={guardianPhone} required placeholder="(00) 00000-0000" onChange={(event) => setGuardianPhone(formatPhone(event.target.value))} /></label>
-            <label className="field required"><span>Parentesco</span><input className="uppercase-input" name="relationship" required placeholder="MÃE, PAI, AVÓ..." /></label>
-            <label className="field wide required"><span>Endereço do responsável</span><input className="uppercase-input" name="guardianAddress" required /></label>
+            <label className="field required"><span>Telefone do responsável</span><input type="tel" inputMode="numeric" autoComplete="tel" value={guardianPhone} required placeholder="(00) 00000-0000" onChange={(event) => setGuardianPhone(formatPhone(event.target.value))} /></label>
+            <label className="field required"><span>Parentesco</span><input name="relationship" autoCapitalize="words" spellCheck required placeholder="Mãe, pai, avó..." /></label>
+            <label className="field wide required"><span>Endereço do responsável</span><input name="guardianAddress" autoComplete="street-address" autoCapitalize="words" spellCheck required /></label>
           </div></fieldset>}
 
           {birthDate && <div className="form-section"><h3>Acesso ao portal</h3><div className="form-grid">
@@ -118,6 +123,7 @@ export function StudentOnboarding({ onBack }: { onBack: () => void }) {
         </form>
       </main>
       {pending && <TermsModal signerName={minor ? pending.guardian?.fullName || "" : pending.fullName} minor={minor} onCancel={() => setPending(null)} onAccept={(name) => void accept(name)} />}
+      {completed && <div className="modal-backdrop"><section className="modal-card compact-modal registration-success"><div className="success-icon">✓</div><span className="eyebrow">CADASTRO CONCLUÍDO</span><h2>Seu cadastro foi realizado com sucesso</h2><p>Agora você já pode entrar no portal usando o e-mail e a senha cadastrados.</p>{completed.accessPin && <div className="pin-result"><span>PIN do aluno</span><strong>{completed.accessPin}</strong></div>}{completed.guardianPin && <div className="pin-result"><span>PIN do responsável</span><strong>{completed.guardianPin}</strong></div>}<button type="button" className="primary onboarding-submit" onClick={onBack}>Fazer login</button></section></div>}
     </div>
   );
 }

@@ -27,7 +27,6 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == personId
         && request.resource.data.personId == personId
         && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.email == request.auth.token.email
         && request.resource.data.roles.size() == 1
         && request.resource.data.roles[0] == 'ALUNO'
         && request.resource.data.status == 'ATIVA';
